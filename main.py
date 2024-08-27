@@ -10,13 +10,8 @@ from database.dbHandler import create_user,existing_user
 import os
 
 # importation des api-key et secret
-from auth.config import CLIENT_ID,CLIENT_SECRET,DOMAIN_NAME
+from auth.config import CLIENT_ID,CLIENT_SECRET,PORT
 
-# initialisation du routeur
-router = fastapi.APIRouter(
-    prefix='/auth',
-    tags=['auth']
-)
 
 # lancement
 app = fastapi.FastAPI()
@@ -78,5 +73,6 @@ async def authDef(request: Request):
     return {"data": user}
 
 # lancement du code (pas forcement necessaire)
+HOST = "127.0.0.1"
 if __name__ == "__main__":
-    uvicorn.run(app,host="127.0.0.1",port=5000)
+    uvicorn.run('main:app',host=HOST,port=PORT,reload=True)
