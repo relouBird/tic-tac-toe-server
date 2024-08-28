@@ -11,7 +11,7 @@ from authlib.integrations.starlette_client import OAuth,OAuthError
 # from database.dbHandler import create_user,existing_user
 import os
 import database.models as models
-from database.dbHandler import engine, SessionLocal
+from database.dbHandler import engine, SessionLocal, createUser, db_dependacy
 from sqlalchemy.orm import Session
 from configuration.classType import GoogleUser
 
@@ -50,15 +50,15 @@ oauth.register(
 )
 
     
-# lancement de la base de données
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# # lancement de la base de données
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
 
-db_dependacy = Annotated[Session,Depends(get_db)]
+# db_dependacy = Annotated[Session,Depends(get_db)]
 
 # endpoint de depart et ici affiche une page html d'accueil
 @app.get("/")
@@ -83,16 +83,7 @@ async def authDef(request: Request, db : db_dependacy):
     
     user_info = token.get('userinfo')
     user = GoogleUser(**user_info)
-    if user:
-        request.session['user'] = dict(user)
-        existing = db.query(models.User_DB).filter(models.User_DB.sub == user.sub).first()
-    if existing:
-        pass
-    else:
-        user_database = models.User_DB(sub=user.sub, email=user.email, username=user.name,googleToken=user.at_hash)
-        db.add(user_database)
-        db.commit()
-        db.refresh(user_database)
+    createUser(google_user=user,db=db,request=request)
     return {"data": user}
 
 # lancement du code (pas forcement necessaire)
