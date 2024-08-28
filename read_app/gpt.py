@@ -1,6 +1,6 @@
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
-from auth.config import GPT_API_KEY
+from configuration.config import GPT_API_KEY
 from pydantic import BaseModel
 from openai import OpenAI
 import uvicorn
