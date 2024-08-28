@@ -1,25 +1,27 @@
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import status, Depends, HTTPException
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from typing import List, Annotated
 from starlette.requests import Request
+from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 from authlib.integrations.starlette_client import OAuth,OAuthError
-from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
-from database.dbHandler import create_user,existing_user
+# from database.dbHandler import create_user,existing_user
 import os
+import database.models as models
+from database.dbHandler import engine, SessionLocal
+from sqlalchemy.orm import Session
+from configuration.classType import GoogleUser
 
 # importation des api-key et secret
-from auth.config import CLIENT_ID,CLIENT_SECRET,DOMAIN_NAME
+from configuration.config import CLIENT_ID,CLIENT_SECRET,PORT
 
-# initialisation du routeur
-router = fastapi.APIRouter(
-    prefix='/auth',
-    tags=['auth']
-)
 
 # lancement
 app = fastapi.FastAPI()
+models.Base.metadata.create_all(bind= engine)
 
 #permet au serveur d'afficher des page html creer dans le dossier templates
 templates = Jinja2Templates(directory="templates")
@@ -47,6 +49,17 @@ oauth.register(
     }
 )
 
+    
+# lancement de la base de données
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+db_dependacy = Annotated[Session,Depends(get_db)]
+
 # endpoint de depart et ici affiche une page html d'accueil
 @app.get("/")
 async def root(request: Request):
@@ -61,22 +74,28 @@ async def login(request : Request):
 
 #endpoint qui gere la connexion avec google malgré qu'on ne la voit pas reellement
 @app.get("/auth")
-async def authDef(request: Request):
+async def authDef(request: Request, db : db_dependacy):
     try:
         token = await oauth.google.authorize_access_token(request)
     except OAuthError as e:
         print(f"OAuthError: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not valide credentials")
     
-    user = token.get('userinfo')
+    user_info = token.get('userinfo')
+    user = GoogleUser(**user_info)
     if user:
         request.session['user'] = dict(user)
-    if existing_user(gid=user["sub"]):
+        existing = db.query(models.User_DB).filter(models.User_DB.sub == user.sub).first()
+    if existing:
         pass
     else:
-        create_user(gid=user["sub"],email=user["email"], username=user["name"])
+        user_database = models.User_DB(sub=user.sub, email=user.email, username=user.name,googleToken=user.at_hash)
+        db.add(user_database)
+        db.commit()
+        db.refresh(user_database)
     return {"data": user}
 
 # lancement du code (pas forcement necessaire)
+HOST = "127.0.0.1"
 if __name__ == "__main__":
-    uvicorn.run(app,host="127.0.0.1",port=5000)
+    uvicorn.run('main:app',host=HOST,port=PORT,reload=True)
