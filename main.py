@@ -89,4 +89,4 @@ async def authDef(request: Request, db : db_dependacy):
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"
 if __name__ == "__main__":
-    uvicorn.run('main:app',host=HOST,port=PORT,reload=True)
+    uvicorn.run('main:app',host=HOST,port=int(PORT),reload=True)
