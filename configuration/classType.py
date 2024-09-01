@@ -1,12 +1,6 @@
 # definition des types de données
 from pydantic import BaseModel
 
-# classe qui definit le type d'utilisateur entrant
-class User_DB(BaseModel):
-    sub: int
-    email: str
-    username: str
-    googleToken: str
     
 # class qui represente toutes les informations envoyées par google pour representer un utilisateur 
 class GoogleUser(BaseModel):
@@ -24,3 +18,18 @@ class GoogleUser(BaseModel):
     family_name: str
     iat: int
     exp: int
+
+    
+class FacebookUser(BaseModel):
+    id: str
+    email: str
+    name : str
+    picture: str
+    token: str
+    expireTokenTime: int
+    
+#  class qui represente les données recues par la requete de verification d'un user
+class FormData(BaseModel):
+    userToken: str
+    expireTokenTime: str
+    gameId: str
