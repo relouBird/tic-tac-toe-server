@@ -129,8 +129,14 @@ async def authDefFacebook(request: Request, db : db_dependacy):
 
     user_info = user_info_response.json()  # Décoder la réponse JSON
     user = FacebookUser(id=user_info['id'], name=user_info['name'], email=user_info['email'], picture=user_info['picture']['data']['url'], token=access_token, expireTokenTime=expire_access_token)
-    user_database= createFacebookUser(facebook_user=user, db=db, request=request)
-    return {'data': user_database}
+    is_exist = getUser(user_id=user.sub, db=db)
+    bool_exist = False
+    if is_exist:
+        bool_exist = True
+        user_database = is_exist
+    else:
+        user_database= createFacebookUser(facebook_user=user, db=db, request=request)
+    return {'data': user_database, 'is_exist': bool_exist}
     
 
 #endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
