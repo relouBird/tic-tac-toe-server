@@ -3,22 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import status, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from typing import List, Annotated
 import requests
 from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 from authlib.integrations.starlette_client import OAuth,OAuthError
 import os
+# from auth.setupAuth import UserTested, get_current_user
 import database.models as models
-from database.models import engine, SessionLocal, db_dependacy
-from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, getUser
+from typing import Annotated
+from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable
+from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, updateGame, getUserByToken, getUserById
 from sqlalchemy.orm import Session
 from configuration.classType import FormData, GoogleUser, FacebookUser
 
 # importation des api-key et secret
-from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL
+from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL
 
 # lancement
 app = fastapi.FastAPI()
@@ -63,6 +65,8 @@ oauth.register(
     redirect_uri=f"{BACKEND_URL}/auth/facebook"
 )
 
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token") 
+
 # endpoint de depart et ici affiche une page html d'accueil
 @app.get("/")
 async def root(request: Request):
@@ -93,7 +97,7 @@ async def authDefGoogle(request: Request, db : db_dependacy):
     user_info = token.get('userinfo')
     user = GoogleUser(**user_info)
     bool_exist = False
-    is_exist = getUser(user_id=user.sub, db=db)
+    is_exist = getUserById(user_id=user.sub, db=db)
     if is_exist:
         bool_exist = True
         user_database = is_exist
@@ -129,7 +133,7 @@ async def authDefFacebook(request: Request, db : db_dependacy):
 
     user_info = user_info_response.json()  # Décoder la réponse JSON
     user = FacebookUser(id=user_info['id'], name=user_info['name'], email=user_info['email'], picture=user_info['picture']['data']['url'], token=access_token, expireTokenTime=expire_access_token)
-    is_exist = getUser(user_id=user.sub, db=db)
+    is_exist = getUserById(user_id=user.id, db=db)
     bool_exist = False
     if is_exist:
         bool_exist = True
@@ -137,22 +141,54 @@ async def authDefFacebook(request: Request, db : db_dependacy):
     else:
         user_database= createFacebookUser(facebook_user=user, db=db, request=request)
     return {'data': user_database, 'is_exist': bool_exist}
-    
+ 
 
-#endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
-# @app.post('game-verification')
-# async def userVerification(request: Request, db: db_dependacy, form_data : FormData):
-#     user_data = getUser(user_token=form_data.userToken, db=db)
-#     if user_data:
-#         game_data = getGame(game_id = form_data.gameId, db=db)
-#         if game_data.first_user_token == user_data.userToken:
-#             pass
-#         else:
-#             return RedirectResponse(f"{FRONTEND_URL}/friend-games/launch?user_token={user_data.user}&game_id={form_data.gameId}")
-#     else:
-#         redirect_uri = request.url_for('login')
-#         return RedirectResponse(redirect_uri)
-    
+# endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
+@app.post('/game-settings')
+async def gameSettings(request: Request, db: db_dependacy, form_data : FormData):
+    user_data: User_DB = getUserByToken(user_token=form_data.userToken, db=db)
+    game_data = getGame(game_id = form_data.gameId, db=db)
+    print(user_data, game_data)
+    # si le user est connecté il continue 
+    if user_data:
+        if game_data:
+            if game_data.first_user_token == user_data.userToken:
+                return {"gameId": game_data.game_id} # on retourne quand l'id de la partie
+            else:
+                # on redirige vers le front avec les bons identifiants
+                game_data= updateGame(game_id=game_data.game_id, second_player_token= user_data.userToken , db=db)
+                return RedirectResponse(f"{FRONTEND_URL}/game?user_token={user_data.userToken}&game_id={form_data.gameId}")
+        else:
+            game_data = createGame(creator=user_data.userToken, db=db)
+            return {"gameId": game_data.game_id} # on retourne l'id de la partie pour partager le lien
+    # ici il est n'est pas connecté mais s'il y a l'id de la partie alors on l'a juste invité donc il faut le rediriger pour creer son 
+    else:
+        if game_data:
+            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+        else:
+            return RedirectResponse(f"{FRONTEND_URL}")
+   
+@app.post('/game-verification')
+async def gameVerification(request: Request, db: db_dependacy, form_data : FormData):
+    user_data: User_DB = getUserByToken(user_token=form_data.userToken, db=db)
+    game_data = getGame(game_id = form_data.gameId, db=db)
+    print(user_data, game_data)
+    if user_data:
+        if game_data:
+            if game_data.second_user_token != "":
+                createGameTable(game_id=game_data.game_id)
+                return RedirectResponse(f"{FRONTEND_URL}?user_token={user_data.userToken}&game_id={form_data.gameId}")
+                # return {"result": "game found."}
+            else:
+                return {"result": "waiting for a player..."}
+        else:
+            return {"result": "no game found."}
+    else:
+        if game_data:
+            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+        else:
+            return RedirectResponse(f"{FRONTEND_URL}")
+
 
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"
