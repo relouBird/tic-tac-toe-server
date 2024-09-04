@@ -19,7 +19,7 @@ class GoogleUser(BaseModel):
     iat: int
     exp: int
 
-    
+# class qui represente toutes les informations dont j'ai besoin pour utilisateur de facebook pour representer un utilisateur    
 class FacebookUser(BaseModel):
     id: str
     email: str
@@ -27,9 +27,22 @@ class FacebookUser(BaseModel):
     picture: str
     token: str
     expireTokenTime: int
+
+# pas encore pret.................... 
+class LoggedUser(BaseModel):
+    id: str
+    email: str
+    name: str
+    hashed_password: str
     
 #  class qui represente les données recues par la requete de verification d'un user
 class FormData(BaseModel):
     userToken: str
-    expireTokenTime: str
+    expireTokenTime: int
+    gameId: str
+
+#  class qui represente les données recues par la requete de verification d'un user
+class FormData(BaseModel):
+    userToken: str
+    expireTokenTime: int
     gameId: str
