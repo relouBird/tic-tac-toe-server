@@ -36,13 +36,15 @@ class User_DB(Base):
     email = Column(String, index=True)
     username = Column(String, index=True)
     expireTokenTime = Column(BigInteger, index=True)
-    
+
+# modele qui represente un jeu   
 class Games(Base):
     __tablename__= "games"
     game_id = Column(String, primary_key=True, index=True)
     first_user_token = Column(String, index=True)
     second_user_token = Column(String, index=True)
-    
+
+# pas encore fonctionnel  
 class User_LoggedIn(Base):
     __tablename__ = "logged_in"
     user_token = Column(String, primary_key=True, index=True)
@@ -51,7 +53,7 @@ class User_LoggedIn(Base):
 def createGameTable(game_id: str):
     with engine.connect() as connection:
         try:
-            connection.execute(text("CREATE TABLE IF NOT EXISTS game_{} ( id varchar(255) PRIMARY KEY, jeu SERIAL NOT NULL)".format(game_id)))
+            connection.execute(text("CREATE TABLE IF NOT EXISTS game_{} ( id SERIAL PRIMARY KEY,gid varchar(255) NOT NULL, jeu SERIAL NOT NULL)".format(game_id)))
             connection.commit()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -65,7 +67,7 @@ def getGameTable(game_id: str):
             if not data:
                 return all_data
             for record in data:
-                    partial = (record[0],record[1])
+                    partial = (record[1],record[2])
                     all_data.append(partial)
             return all_data  
         except Exception as e:
@@ -76,7 +78,7 @@ def addDataToGameTable(game_id: str,tour : Tuple[str,int]):
     (user_token,numberPlayed) = tour[0],tour[1]
     with engine.connect() as connection:
         try:
-            connection.execute(text("INSERT INTO game_{} (id,jeu) VALUES ('{}',{})".format(game_id, user_token, numberPlayed)))
+            connection.execute(text("INSERT INTO game_{} (gid,jeu) VALUES ('{}',{})".format(game_id, user_token, numberPlayed)))
             connection.commit()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
