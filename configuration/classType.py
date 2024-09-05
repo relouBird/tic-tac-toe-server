@@ -1,4 +1,5 @@
 # definition des types de données
+from typing import List, Tuple
 from pydantic import BaseModel
 
     
@@ -41,8 +42,13 @@ class FormData(BaseModel):
     expireTokenTime: int
     gameId: str
 
-#  class qui represente les données recues par la requete de verification d'un user
-class FormData(BaseModel):
-    userToken: str
-    expireTokenTime: int
-    gameId: str
+# classe qui definit la structure d'un jeu...  
+class GameData(BaseModel):
+    gameId : str
+    first_user_token : str
+    second_user_token : str
+    tours : List[Tuple[str,int]]
+    
+class SetOfGame(BaseModel):
+    id: str
+    jeu: int

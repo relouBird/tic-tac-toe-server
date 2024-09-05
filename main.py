@@ -14,10 +14,10 @@ import os
 # from auth.setupAuth import UserTested, get_current_user
 import database.models as models
 from typing import Annotated
-from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable
+from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable
 from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, updateGame, getUserByToken, getUserById
 from sqlalchemy.orm import Session
-from configuration.classType import FormData, GoogleUser, FacebookUser
+from configuration.classType import FormData, GameData, GoogleUser, FacebookUser
 
 # importation des api-key et secret
 from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL
@@ -157,17 +157,18 @@ async def gameSettings(request: Request, db: db_dependacy, form_data : FormData)
             else:
                 # on redirige vers le front avec les bons identifiants
                 game_data= updateGame(game_id=game_data.game_id, second_player_token= user_data.userToken , db=db)
-                return RedirectResponse(f"{FRONTEND_URL}/game?user_token={user_data.userToken}&game_id={form_data.gameId}")
+                return {"redirect": f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
         else:
             game_data = createGame(creator=user_data.userToken, db=db)
             return {"gameId": game_data.game_id} # on retourne l'id de la partie pour partager le lien
     # ici il est n'est pas connecté mais s'il y a l'id de la partie alors on l'a juste invité donc il faut le rediriger pour creer son 
     else:
         if game_data:
-            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+            return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
         else:
-            return RedirectResponse(f"{FRONTEND_URL}")
-   
+            return {"redirect": f"{FRONTEND_URL}"}
+
+# ce endpoint permet de savoir si une autre personne a rejoint le lien d'invitation pour debuter la partie 
 @app.post('/game-verification')
 async def gameVerification(request: Request, db: db_dependacy, form_data : FormData):
     user_data: User_DB = getUserByToken(user_token=form_data.userToken, db=db)
@@ -177,7 +178,7 @@ async def gameVerification(request: Request, db: db_dependacy, form_data : FormD
         if game_data:
             if game_data.second_user_token != "":
                 createGameTable(game_id=game_data.game_id)
-                return RedirectResponse(f"{FRONTEND_URL}?user_token={user_data.userToken}&game_id={form_data.gameId}")
+                return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
                 # return {"result": "game found."}
             else:
                 return {"result": "waiting for a player..."}
@@ -185,10 +186,17 @@ async def gameVerification(request: Request, db: db_dependacy, form_data : FormD
             return {"result": "no game found."}
     else:
         if game_data:
-            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+            return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
         else:
-            return RedirectResponse(f"{FRONTEND_URL}")
+            return {"redirect": f"{FRONTEND_URL}"}
 
+# ce endpoint permet de renvoyer les données du jeu en cours
+@app.post("/get-gamedata")
+async def getDataGame(request: Request, db: db_dependacy, dataGame : GameData):
+    gameDataPlayed = getGameTable(game_id=dataGame.gameId)
+    gameToSend = GameData(gameId=dataGame.gameId,first_user_token=dataGame.first_user_token,second_user_token=dataGame.second_user_token, tours=gameDataPlayed)
+    print(gameToSend)
+    return gameToSend
 
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"

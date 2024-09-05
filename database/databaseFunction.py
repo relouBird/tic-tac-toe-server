@@ -1,6 +1,7 @@
-from configuration.classType import FacebookUser, GoogleUser, LoggedUser
+from cgitb import text
+from configuration.classType import FacebookUser, GoogleUser, LoggedUser, SetOfGame
 from .models import Base, User_DB, Games
-from .models import db_dependacy
+from .models import db_dependacy, inspector
 from starlette.requests import Request
 import secrets
 import string
@@ -82,6 +83,27 @@ def getGame(game_id: str, db: db_dependacy) -> Games:
         return None
     # retourne la partie en question
     return existingGame
+
+# permet de recuperer les données table de jeu en fonction de son nom
+# def getGameTable(game_id: str, db: db_dependacy):
+#     # existingDataGameList = db.query(Base.metadata.tables["game_{}".format(game_id)]).all()
+    
+#     schemas = inspector.get_schema_names()
+
+#     for schema in schemas:
+#         print("schema: %s" % schema)
+#         for table_name in inspector.get_table_names(schema=schema):
+#             for column in inspector.get_columns(table_name, schema=schema):
+#                 print("Column: %s" % column)
+
+#     # all_data : List[Tuple[str,int]] = []
+#     # if not existingDataGameList:
+#     #     return all_data
+#     # for dataTable in existingDataGameList:
+#     #     partial = (dataTable["id"],dataTable["jeu"])
+#     #     all_data.append(partial)
+#     # # retourne la partie en question
+#     # return all_data
 
 # permet de creer un jeu a partir de l'id d'un createur
 def createGame(creator: str, db: db_dependacy) -> Games:

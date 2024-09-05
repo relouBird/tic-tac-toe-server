@@ -3,11 +3,12 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, BigInteger,
 from typing import Annotated
 from fastapi import Depends, HTTPException
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 # from sqlalchemy.ext.declarative import declarative_base
 from configuration.config import URL_DATABASE 
 from sqlalchemy.orm import Session
+from typing import List, Tuple
 
 
 
@@ -15,6 +16,7 @@ URL_DATABASE_POSTGRESQL = URL_DATABASE
 engine = create_engine(URL_DATABASE_POSTGRESQL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+inspector = inspect(engine)
 Base = declarative_base()
 
 # lancement de la base de données
@@ -53,6 +55,20 @@ def createGameTable(game_id: str):
         try:
             connection.execute(text("CREATE TABLE IF NOT EXISTS game_{} ( id varchar(100) PRIMARY KEY, jeu SERIAL NOT NULL)".format(game_id)))
             connection.commit()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        
+def getGameTable(game_id: str):
+    with engine.connect() as connection:
+        try:
+            all_data : List[Tuple[str,int]] = []
+            data = connection.execute(text("SELECT * FROM game_{}".format(game_id))).fetchall()
+            if not data:
+                return all_data
+            for record in data:
+                    partial = (record[0],record[1])
+                    all_data.append(partial)
+            return all_data  
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
