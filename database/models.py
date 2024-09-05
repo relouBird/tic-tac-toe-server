@@ -15,8 +15,6 @@ from typing import List, Tuple
 URL_DATABASE_POSTGRESQL = URL_DATABASE
 engine = create_engine(URL_DATABASE_POSTGRESQL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-inspector = inspect(engine)
 Base = declarative_base()
 
 # lancement de la base de données
@@ -49,15 +47,16 @@ class User_LoggedIn(Base):
     __tablename__ = "logged_in"
     user_token = Column(String, primary_key=True, index=True)
 
-
+# fonction qui permet de creer une table à partir d'un nom personnalisé
 def createGameTable(game_id: str):
     with engine.connect() as connection:
         try:
-            connection.execute(text("CREATE TABLE IF NOT EXISTS game_{} ( id varchar(100) PRIMARY KEY, jeu SERIAL NOT NULL)".format(game_id)))
+            connection.execute(text("CREATE TABLE IF NOT EXISTS game_{} ( id varchar(255) PRIMARY KEY, jeu SERIAL NOT NULL)".format(game_id)))
             connection.commit()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        
+
+# fonction qui permet de recuperer une table à partir d'un nom personnalisé       
 def getGameTable(game_id: str):
     with engine.connect() as connection:
         try:
@@ -72,6 +71,15 @@ def getGameTable(game_id: str):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+# fonction qui permet d'ajouter une donnée dans une table personnalisée
+def addDataToGameTable(game_id: str,tour : Tuple[str,int]):
+    (user_token,numberPlayed) = tour[0],tour[1]
+    with engine.connect() as connection:
+        try:
+            connection.execute(text("INSERT INTO game_{} (id,jeu) VALUES ('{}',{})".format(game_id, user_token, numberPlayed)))
+            connection.commit()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

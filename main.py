@@ -14,7 +14,7 @@ import os
 # from auth.setupAuth import UserTested, get_current_user
 import database.models as models
 from typing import Annotated
-from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable
+from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable, addDataToGameTable
 from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, updateGame, getUserByToken, getUserById
 from sqlalchemy.orm import Session
 from configuration.classType import FormData, GameData, GoogleUser, FacebookUser
@@ -197,6 +197,21 @@ async def getDataGame(request: Request, db: db_dependacy, dataGame : GameData):
     gameToSend = GameData(gameId=dataGame.gameId,first_user_token=dataGame.first_user_token,second_user_token=dataGame.second_user_token, tours=gameDataPlayed)
     print(gameToSend)
     return gameToSend
+
+# ce endpoint permet de renvoyer les données du jeu en cours
+@app.post("/update-gamedata")
+async def updateDataGame(request: Request, db: db_dependacy, dataGames : GameData):
+    gameDataPlayed = getGameTable(game_id=dataGames.gameId)
+    difference = len(dataGames.tours) - len(gameDataPlayed)
+    if difference == 1:
+        addDataToGameTable(game_id=dataGames.gameId, tour=dataGames.tours[-1])
+    elif difference == 0:
+        pass
+    elif difference < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error: game data is corrupted")
+        
+    gameToSend = GameData(gameId=dataGames.gameId,first_user_token=dataGames.first_user_token,second_user_token=dataGames.second_user_token, tours=gameDataPlayed)
+    return {"data": "send"}
 
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"
