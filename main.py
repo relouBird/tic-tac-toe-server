@@ -5,8 +5,6 @@ from fastapi import status, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from openai import OpenAI
-from openai import RateLimitError
 from pydantic import BaseModel
 import requests
 from starlette.requests import Request
@@ -19,11 +17,11 @@ import database.models as models
 from typing import Annotated, List, Tuple
 from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable, addDataToGameTable
 from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, createAIGame, updateGame, getUserByToken, getUserById
-from sqlalchemy.orm import Session
+from database.tictactoeHandler import best_move, renderBoard
 from configuration.classType import FormData, GameData, GoogleUser, FacebookUser
 
 # importation des api-key et secret
-from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL, GPT_API_KEY
+from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL
 
 # lancement
 app = fastapi.FastAPI()
@@ -68,35 +66,6 @@ oauth.register(
     redirect_uri=f"{BACKEND_URL}/auth/facebook"
 )
 
-# definition des variables permettant de gerer OPENAI
-client = OpenAI(api_key=GPT_API_KEY)
-
-# cette fonction demande l'ia a chaque fois le meilleur emplacement pour jouer
-async def getResponseFromGPT(promptValue : List[Tuple[str,int]]):
-    player = []
-    ia = []
-    message = ""
-    if len(promptValue) == 1:
-        message = "Je joue actuellement a un Tic Tac Toe et pour te reprensenter ça on dirait que chaque case represente un chiffre allant de 1 à 9 du haut à gauche jusque bas à droite et l'adversaire à jouer à l'emplacement numéro {} quel le meilleur emplacement pour le contrer ? Donne moi juste le chiffre de l'emplacement.".format(promptValue[0][1])
-    elif len(promptValue) > 1:
-        for element in promptValue:
-            if element[0] != "AI":
-                player.append(element[1])
-            else:
-                ia.append(element[1])
-        message = "Je joue actuellement a un Tic Tac Toe et pour te reprensenter ça on dirait que chaque case represente un chiffre allant de 1 à 9 du haut à gauche jusque bas à droite et l'adversaire à jouer aux emplacements  numérotés {} et j'ai jouer aux emplacements numerotés {} quel le meilleur emplacement pour le contrer ? Donne moi juste le chiffre de l'emplacement.".format(",".join(player), ",".join(ia))
-    elif len(promptValue) == 0:
-        message = ""
-    
-    # Réessayer l'appel en cas d'erreur de quota (RateLimitError)
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "assistant", "content": message}
-        ]
-        )
-    return completion.choices[0].message['content']
 
 # endpoint de depart et ici affiche une page html d'accueil
 @app.get("/")
@@ -135,8 +104,8 @@ async def authDefGoogle(request: Request, db : db_dependacy):
     else:
         user_database = createGoogleUser(google_user=user,db=db,request=request)
     
-    # return RedirectResponse(f"{FRONTEND_URL}/home?user_token={user_database.user}")
-    return {'data': user_database, 'is_exist': bool_exist}
+    return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_database.userToken}")
+    # return {'data': user_database, 'is_exist': bool_exist}
 
 #endpoint qui gere la connexion avec facebook malgré qu'on ne la voit pas reellement
 @app.get("/auth/facebook")
@@ -171,7 +140,8 @@ async def authDefFacebook(request: Request, db : db_dependacy):
         user_database = is_exist
     else:
         user_database= createFacebookUser(facebook_user=user, db=db, request=request)
-    return {'data': user_database, 'is_exist': bool_exist}
+    # return {'data': user_database, 'is_exist': bool_exist}
+    return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_database.userToken}")
  
 
 # endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
@@ -188,16 +158,20 @@ async def gameSettings(request: Request, db: db_dependacy, form_data : FormData)
             else:
                 # on redirige vers le front avec les bons identifiants
                 game_data= updateGame(game_id=game_data.game_id, second_player_token= user_data.userToken , db=db)
-                return {"redirect": f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
+                # return {"redirect": f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
+                return RedirectResponse(f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}")
         else:
             game_data = createGame(creator=user_data.userToken, db=db)
             return {"gameId": game_data.game_id} # on retourne l'id de la partie pour partager le lien
     # ici il est n'est pas connecté mais s'il y a l'id de la partie alors on l'a juste invité donc il faut le rediriger pour creer son 
     else:
         if game_data:
-            return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
+            # return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
+            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+        
         else:
-            return {"redirect": f"{FRONTEND_URL}"}
+            # return {"redirect": f"{FRONTEND_URL}"}
+            return RedirectResponse(f"{FRONTEND_URL}")
 
 # ce endpoint permet de savoir si une autre personne a rejoint le lien d'invitation pour debuter la partie 
 @app.post('/game-verification')
@@ -209,17 +183,19 @@ async def gameVerification(request: Request, db: db_dependacy, form_data : FormD
         if game_data:
             if game_data.second_user_token != "":
                 createGameTable(game_id=game_data.game_id)
-                return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"} # url a changer
-                # return {"result": "game found."}
+                # return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"} # url a changer
+                return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}")
             else:
                 return {"result": "waiting for a player..."}
         else:
             return {"result": "no game found."}
     else:
         if game_data:
-            return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
+            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
+            # return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
         else:
-            return {"redirect": f"{FRONTEND_URL}"}
+            return RedirectResponse(f"{FRONTEND_URL}")
+            # return {"redirect": f"{FRONTEND_URL}"}
 
 # ce endpoint permet de renvoyer les données du jeu en cours
 @app.post("/get-gamedata")
@@ -250,9 +226,11 @@ async def launchGame(db: db_dependacy, form_data : FormData):
         game_data = createAIGame(creator=user_data.userToken, db=db)
         print(user_data, game_data)
         createGameTable(game_id=game_data.game_id)
-        return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
+        return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}")
+        # return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
     else:
-        return {"redirect": f"{FRONTEND_URL}"}
+        return RedirectResponse(f"{FRONTEND_URL}")
+        # return {"redirect": f"{FRONTEND_URL}"}
 
 # ce endpoint permet de recuperer le jeu avec l'ia sur le menu de lancement de jeu
 @app.get("/get-ia-game") # pas necessaire puisqu'on peut toujours recuperer les données du jeu en cours grace a get-gamedata
@@ -265,8 +243,15 @@ async def updateAIGame( db: db_dependacy, dataGames : GameData):
     gameDataPlayed = getGameTable(game_id=dataGames.gameId)
     difference = len(dataGames.tours) - len(gameDataPlayed)
     if difference == 1:
-        dataAI = await getResponseFromGPT(dataGames.tours)
-        return dataAI
+        addDataToGameTable(game_id=dataGames.gameId, tour=dataGames.tours[-1]) # ajoute ce que le joueur a fait
+        board = renderBoard(tableData=dataGames.tours) # creer un tableau à partir des mouvements
+        ia_move = best_move(board)
+        ia_table: int = ia_move  +1
+        tableEntry = "AI",ia_table
+        board[ia_move] = "O"
+        addDataToGameTable(game_id=dataGames.gameId, tour=tableEntry)
+        gameDataPlayed = getGameTable(game_id=dataGames.gameId)
+        return gameDataPlayed
     elif difference == 0:
         pass
     elif difference < 0:
