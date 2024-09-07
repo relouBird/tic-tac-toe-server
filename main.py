@@ -1,9 +1,12 @@
+import time
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import status, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from openai import OpenAI
+from openai import RateLimitError
 from pydantic import BaseModel
 import requests
 from starlette.requests import Request
@@ -13,14 +16,14 @@ from authlib.integrations.starlette_client import OAuth,OAuthError
 import os
 # from auth.setupAuth import UserTested, get_current_user
 import database.models as models
-from typing import Annotated
+from typing import Annotated, List, Tuple
 from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable, addDataToGameTable
-from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, updateGame, getUserByToken, getUserById
+from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, createAIGame, updateGame, getUserByToken, getUserById
 from sqlalchemy.orm import Session
 from configuration.classType import FormData, GameData, GoogleUser, FacebookUser
 
 # importation des api-key et secret
-from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL
+from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL, GPT_API_KEY
 
 # lancement
 app = fastapi.FastAPI()
@@ -65,7 +68,35 @@ oauth.register(
     redirect_uri=f"{BACKEND_URL}/auth/facebook"
 )
 
-# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token") 
+# definition des variables permettant de gerer OPENAI
+client = OpenAI(api_key=GPT_API_KEY)
+
+# cette fonction demande l'ia a chaque fois le meilleur emplacement pour jouer
+async def getResponseFromGPT(promptValue : List[Tuple[str,int]]):
+    player = []
+    ia = []
+    message = ""
+    if len(promptValue) == 1:
+        message = "Je joue actuellement a un Tic Tac Toe et pour te reprensenter ça on dirait que chaque case represente un chiffre allant de 1 à 9 du haut à gauche jusque bas à droite et l'adversaire à jouer à l'emplacement numéro {} quel le meilleur emplacement pour le contrer ? Donne moi juste le chiffre de l'emplacement.".format(promptValue[0][1])
+    elif len(promptValue) > 1:
+        for element in promptValue:
+            if element[0] != "AI":
+                player.append(element[1])
+            else:
+                ia.append(element[1])
+        message = "Je joue actuellement a un Tic Tac Toe et pour te reprensenter ça on dirait que chaque case represente un chiffre allant de 1 à 9 du haut à gauche jusque bas à droite et l'adversaire à jouer aux emplacements  numérotés {} et j'ai jouer aux emplacements numerotés {} quel le meilleur emplacement pour le contrer ? Donne moi juste le chiffre de l'emplacement.".format(",".join(player), ",".join(ia))
+    elif len(promptValue) == 0:
+        message = ""
+    
+    # Réessayer l'appel en cas d'erreur de quota (RateLimitError)
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "assistant", "content": message}
+        ]
+        )
+    return completion.choices[0].message['content']
 
 # endpoint de depart et ici affiche une page html d'accueil
 @app.get("/")
@@ -178,7 +209,7 @@ async def gameVerification(request: Request, db: db_dependacy, form_data : FormD
         if game_data:
             if game_data.second_user_token != "":
                 createGameTable(game_id=game_data.game_id)
-                return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
+                return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"} # url a changer
                 # return {"result": "game found."}
             else:
                 return {"result": "waiting for a player..."}
@@ -209,9 +240,38 @@ async def updateDataGame(request: Request, db: db_dependacy, dataGames : GameDat
         pass
     elif difference < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error: game data is corrupted")
-        
-    gameToSend = GameData(gameId=dataGames.gameId,first_user_token=dataGames.first_user_token,second_user_token=dataGames.second_user_token, tours=gameDataPlayed)
     return {"data": "send"}
+
+# ce endpoint permet de lancer le jeu avec l'ia sur le menu de lancement de jeu
+@app.post("/launch-ia-game")
+async def launchGame(db: db_dependacy, form_data : FormData):
+    user_data: User_DB = getUserByToken(user_token=form_data.userToken, db=db)
+    if user_data:
+        game_data = createAIGame(creator=user_data.userToken, db=db)
+        print(user_data, game_data)
+        createGameTable(game_id=game_data.game_id)
+        return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
+    else:
+        return {"redirect": f"{FRONTEND_URL}"}
+
+# ce endpoint permet de recuperer le jeu avec l'ia sur le menu de lancement de jeu
+@app.get("/get-ia-game") # pas necessaire puisqu'on peut toujours recuperer les données du jeu en cours grace a get-gamedata
+async def getAIGame():
+    pass
+
+# ce endpoint permet de d'ajouter un donnée de jeu avec l'ia sur le menu de lancement de jeu
+@app.post("/update-ia-game")
+async def updateAIGame( db: db_dependacy, dataGames : GameData):
+    gameDataPlayed = getGameTable(game_id=dataGames.gameId)
+    difference = len(dataGames.tours) - len(gameDataPlayed)
+    if difference == 1:
+        dataAI = await getResponseFromGPT(dataGames.tours)
+        return dataAI
+    elif difference == 0:
+        pass
+    elif difference < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error: game data is corrupted")
+    return {"data": "send IA"}
 
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"

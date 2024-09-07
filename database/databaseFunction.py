@@ -8,6 +8,7 @@ import string
 
 # les fonctions utilitaires
 #--------------------------------
+
 # Celle ci permet de generer un id de maniere aleatoire
 def genId(length = 10):
     car = string.ascii_letters + string.digits
@@ -96,6 +97,16 @@ def createGame(creator: str, db: db_dependacy) -> Games:
     # retourne la partie en question
     return game_data
 
+# permet de creer un jeu avec l'IA a partir de l'id d'un createur
+def createAIGame(creator: str, db: db_dependacy) -> Games:
+    gid = genId(24)
+    game_data = Games(game_id=gid, first_user_token=creator, second_user_token="AI")
+    db.add(game_data)
+    db.commit()
+    db.refresh(game_data)
+    # retourne la partie en question
+    return game_data
+
 # permet de mettre a jour les données d'un jeu en cours generalement pour ajouter le 2eme joueurs
 def updateGame(game_id: str, second_player_token: str, db: db_dependacy) -> Games:
     existingGame = db.query(Games).filter(Games.game_id == game_id).first()
@@ -106,6 +117,3 @@ def updateGame(game_id: str, second_player_token: str, db: db_dependacy) -> Game
     db.commit()
     existingGame = db.query(Games).filter(Games.game_id == game_id).first()
     return existingGame
-
-def searchTable():
-    pass

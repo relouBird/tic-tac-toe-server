@@ -49,6 +49,8 @@ class GameData(BaseModel):
     second_user_token : str
     tours : List[Tuple[str,int]]
     
+type GameTableDataType = List[Tuple[str,int]]
+
 class SetOfGame(BaseModel):
     id: str
     jeu: int
