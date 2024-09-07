@@ -118,16 +118,6 @@ def addDataToGameTable(game_id: str,tour : Tuple[str,int]):
             connection.commit()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        
-# fonction qui permet d'ajouter une donnée dans une table personnalisée pour le jeu avec l'IA
-def addDataToAIGameTable(game_id: str,tours : List[Tuple[str,int]]):
-    (user_token,numberPlayed) = tours[-1][0],tours[-1][1]
-    with engine.connect() as connection:
-        try:
-            connection.execute(text("INSERT INTO game_{} (gid,jeu) VALUES ('{}',{})".format(game_id, user_token, numberPlayed)))
-            connection.commit()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
