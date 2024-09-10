@@ -40,6 +40,15 @@ app.add_middleware(
     https_only=False  # Mettez à True en production avec HTTPS
 )
 
+# Ajoutez le middleware CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL],  # Autoriser votre frontend local
+    allow_credentials=True,
+    allow_methods=["*"],  # Autoriser toutes les méthodes (GET, POST, etc.)
+    allow_headers=["*"],  # Autoriser tous les headers
+)
+
 #permet de d'initialiser l'authentification ici avec google
 oauth = OAuth()
 oauth.register(
@@ -104,7 +113,7 @@ async def authDefGoogle(request: Request, db : db_dependacy):
     else:
         user_database = createGoogleUser(google_user=user,db=db,request=request)
     
-    return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
     # return {'data': user_database, 'is_exist': bool_exist}
 
 #endpoint qui gere la connexion avec facebook malgré qu'on ne la voit pas reellement
@@ -141,7 +150,7 @@ async def authDefFacebook(request: Request, db : db_dependacy):
     else:
         user_database= createFacebookUser(facebook_user=user, db=db, request=request)
     # return {'data': user_database, 'is_exist': bool_exist}
-    return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
  
 
 # endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
@@ -154,12 +163,11 @@ async def gameSettings(request: Request, db: db_dependacy, form_data : FormData)
     if user_data:
         if game_data:
             if game_data.first_user_token == user_data.userToken:
-                return {"gameId": game_data.game_id} # on retourne quand l'id de la partie
+                return {"gameId": game_data.game_id} # on retourne quand meme l'id de la partie
             else:
                 # on redirige vers le front avec les bons identifiants
                 game_data= updateGame(game_id=game_data.game_id, second_player_token= user_data.userToken , db=db)
-                # return {"redirect": f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}"}
-                return RedirectResponse(f"{FRONTEND_URL}/game.html?user_token={user_data.userToken}&game_id={form_data.gameId}")
+                return {"redirect": f"{FRONTEND_URL}/game?user_token={user_data.userToken}&game_id={form_data.gameId}"}
         else:
             game_data = createGame(creator=user_data.userToken, db=db)
             return {"gameId": game_data.game_id} # on retourne l'id de la partie pour partager le lien
@@ -181,21 +189,20 @@ async def gameVerification(request: Request, db: db_dependacy, form_data : FormD
     print(user_data, game_data)
     if user_data:
         if game_data:
-            if game_data.second_user_token != "":
+            if game_data.second_user_token != "": # il y a un user et une partie en cours on verifie pour voir s'il y 'a un un second joueur
                 createGameTable(game_id=game_data.game_id)
-                # return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"} # url a changer
-                return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}")
+                # renvoi l'adresse pour lancer le jeu...
+                return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={form_data.gameId}"} # url a changer
             else:
+                # il y' a pas toujours de second joueur
                 return {"result": "waiting for a player..."}
         else:
             return {"result": "no game found."}
     else:
         if game_data:
-            return RedirectResponse(f"{FRONTEND_URL}?game_id={form_data.gameId}")
-            # return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
+            return {"redirect": f"{FRONTEND_URL}?game_id={form_data.gameId}"}
         else:
-            return RedirectResponse(f"{FRONTEND_URL}")
-            # return {"redirect": f"{FRONTEND_URL}"}
+            return {"redirect": f"{FRONTEND_URL}"}
 
 # ce endpoint permet de renvoyer les données du jeu en cours
 @app.post("/get-gamedata")
@@ -226,16 +233,11 @@ async def launchGame(db: db_dependacy, form_data : FormData):
         game_data = createAIGame(creator=user_data.userToken, db=db)
         print(user_data, game_data)
         createGameTable(game_id=game_data.game_id)
-        return RedirectResponse(f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}")
-        # return {"redirect": f"{FRONTEND_URL}/log.html?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
+        return {"redirect": f"{FRONTEND_URL}/game?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
     else:
         return RedirectResponse(f"{FRONTEND_URL}")
         # return {"redirect": f"{FRONTEND_URL}"}
 
-# ce endpoint permet de recuperer le jeu avec l'ia sur le menu de lancement de jeu
-@app.get("/get-ia-game") # pas necessaire puisqu'on peut toujours recuperer les données du jeu en cours grace a get-gamedata
-async def getAIGame():
-    pass
 
 # ce endpoint permet de d'ajouter un donnée de jeu avec l'ia sur le menu de lancement de jeu
 @app.post("/update-ia-game")
@@ -251,7 +253,8 @@ async def updateAIGame( db: db_dependacy, dataGames : GameData):
         board[ia_move] = "O"
         addDataToGameTable(game_id=dataGames.gameId, tour=tableEntry)
         gameDataPlayed = getGameTable(game_id=dataGames.gameId)
-        return gameDataPlayed
+        newDataGames = GameData(gameId=dataGames.gameId, first_user_token=dataGames.first_user_token, second_user_token=dataGames.second_user_token, tours=gameDataPlayed)
+        return newDataGames
     elif difference == 0:
         pass
     elif difference < 0:
