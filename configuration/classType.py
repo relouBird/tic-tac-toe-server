@@ -1,12 +1,7 @@
 # definition des types de données
+from typing import List, Tuple
 from pydantic import BaseModel
 
-# classe qui definit le type d'utilisateur entrant
-class User_DB(BaseModel):
-    sub: int
-    email: str
-    username: str
-    googleToken: str
     
 # class qui represente toutes les informations envoyées par google pour representer un utilisateur 
 class GoogleUser(BaseModel):
@@ -24,3 +19,38 @@ class GoogleUser(BaseModel):
     family_name: str
     iat: int
     exp: int
+
+# class qui represente toutes les informations dont j'ai besoin pour utilisateur de facebook pour representer un utilisateur    
+class FacebookUser(BaseModel):
+    id: str
+    email: str
+    name : str
+    picture: str
+    token: str
+    expireTokenTime: int
+
+# pas encore pret.................... 
+class LoggedUser(BaseModel):
+    id: str
+    email: str
+    name: str
+    hashed_password: str
+    
+#  class qui represente les données recues par la requete de verification d'un user
+class FormData(BaseModel):
+    userToken: str
+    expireTokenTime: int
+    gameId: str
+
+# classe qui definit la structure d'un jeu...  
+class GameData(BaseModel):
+    gameId : str
+    first_user_token : str
+    second_user_token : str
+    tours : List[Tuple[str,int]]
+    
+type GameTableDataType = List[Tuple[str,int]]
+
+class SetOfGame(BaseModel):
+    id: str
+    jeu: int
