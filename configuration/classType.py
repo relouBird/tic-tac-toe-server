@@ -49,6 +49,13 @@ class GameData(BaseModel):
     second_user_token : str
     tours : List[Tuple[str,int]]
     
+
+# classe qui definit le type de retour dans la creation d'un jeu avec AI
+class GameDataWithAI(BaseModel):
+    url: str
+    id: str
+    token : str
+    
 type GameTableDataType = List[Tuple[str,int]]
 
 class SetOfGame(BaseModel):

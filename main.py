@@ -18,7 +18,7 @@ from typing import Annotated, List, Tuple
 from database.models import User_DB, engine, SessionLocal, db_dependacy, createGameTable, getGameTable, addDataToGameTable
 from database.databaseFunction import createGoogleUser, createFacebookUser, getGame, createGame, createAIGame, updateGame, getUserByToken, getUserById
 from database.tictactoeHandler import best_move, renderBoard
-from configuration.classType import FormData, GameData, GoogleUser, FacebookUser
+from configuration.classType import FormData, GameData, GameDataWithAI, GoogleUser, FacebookUser
 
 # importation des api-key et secret
 from configuration.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PORT,FACEBOOK_CLIENT_ID,FACEBOOK_CLIENT_SECRET, BACKEND_URL, FRONTEND_URL
@@ -58,7 +58,7 @@ oauth.register(
     client_secret=GOOGLE_CLIENT_SECRET,
     client_kwargs={
         'scope': 'email openid profile',
-        'redirect_url': "http://127.0.0.1:5000/auth/google"
+        'redirect_url': "http://127.0.0.1:5100/auth/google"
     }
 )
 
@@ -113,7 +113,7 @@ async def authDefGoogle(request: Request, db : db_dependacy):
     else:
         user_database = createGoogleUser(google_user=user,db=db,request=request)
     
-    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/?user_token={user_database.userToken}")
     # return {'data': user_database, 'is_exist': bool_exist}
 
 #endpoint qui gere la connexion avec facebook malgré qu'on ne la voit pas reellement
@@ -150,7 +150,7 @@ async def authDefFacebook(request: Request, db : db_dependacy):
     else:
         user_database= createFacebookUser(facebook_user=user, db=db, request=request)
     # return {'data': user_database, 'is_exist': bool_exist}
-    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/?user_token={user_database.userToken}")
  
 
 # endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
@@ -233,11 +233,11 @@ async def launchGame(db: db_dependacy, form_data : FormData):
         game_data = createAIGame(creator=user_data.userToken, db=db)
         print(user_data, game_data)
         createGameTable(game_id=game_data.game_id)
-        return {"redirect": f"{FRONTEND_URL}/game?user_token={user_data.userToken}&game_id={game_data.game_id}"} # url a changer
+        redirectData = GameDataWithAI(url=f"{FRONTEND_URL}/game", id=game_data.game_id, token=user_data.userToken)
+        return redirectData # url a changer
     else:
-        return RedirectResponse(f"{FRONTEND_URL}")
-        # return {"redirect": f"{FRONTEND_URL}"}
-
+        # return RedirectResponse(f"{FRONTEND_URL}")
+        return {"redirect": f"{FRONTEND_URL}"}
 
 # ce endpoint permet de d'ajouter un donnée de jeu avec l'ia sur le menu de lancement de jeu
 @app.post("/update-ia-game")
@@ -259,7 +259,7 @@ async def updateAIGame( db: db_dependacy, dataGames : GameData):
         pass
     elif difference < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error: game data is corrupted")
-    return {"data": "send IA"}
+    return {"data": dataGames}
 
 # lancement du code (pas forcement necessaire)
 HOST = "127.0.0.1"
