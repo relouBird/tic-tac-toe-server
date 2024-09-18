@@ -58,7 +58,7 @@ oauth.register(
     client_secret=GOOGLE_CLIENT_SECRET,
     client_kwargs={
         'scope': 'email openid profile',
-        'redirect_url': "http://127.0.0.1:5000/auth/google"
+        'redirect_url': "http://127.0.0.1:5100/auth/google"
     }
 )
 
@@ -113,7 +113,7 @@ async def authDefGoogle(request: Request, db : db_dependacy):
     else:
         user_database = createGoogleUser(google_user=user,db=db,request=request)
     
-    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/?user_token={user_database.userToken}")
     # return {'data': user_database, 'is_exist': bool_exist}
 
 #endpoint qui gere la connexion avec facebook malgré qu'on ne la voit pas reellement
@@ -150,7 +150,7 @@ async def authDefFacebook(request: Request, db : db_dependacy):
     else:
         user_database= createFacebookUser(facebook_user=user, db=db, request=request)
     # return {'data': user_database, 'is_exist': bool_exist}
-    return RedirectResponse(f"{FRONTEND_URL}/selectgame?user_token={user_database.userToken}")
+    return RedirectResponse(f"{FRONTEND_URL}/?user_token={user_database.userToken}")
  
 
 # endpoint qui permet de verifier si un utilisateur est conncté ou pas et de le renvoyer vers la connexion sinon...
